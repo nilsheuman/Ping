@@ -34,6 +34,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcelable;
 import android.util.Log;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -154,6 +155,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(mBinding.mainActivityL);
 
         getPermissions();
+        keepScreenOn();
+    }
+
+    private void keepScreenOn() {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     // See https://developer.android.com/guide/components/activities/activity-lifecycle

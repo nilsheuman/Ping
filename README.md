@@ -4,6 +4,29 @@ Low-cost sonar, using an Erchang Fish Finder.
 
 <img src="Screenshot_20201229-120351.png" alt="screenshot" width="250"/> <img src="Device.png" alt="device" width="250"/>
 
+## Fork
+
+This is a fork of https://github.com/cdot/Ping
+
+I found the original repo and bought a similar sonar. However, I received a different model with a slightly different protocol.
+
+This fork is to add support for the [Erchang F68 on AliExpress](https://www.aliexpress.com/item/1005005631782287.html). About A$80 at the time (2024).
+
+The official app [Erchang F68 on Play Store](https://play.google.com/store/apps/details?id=com.appxdx.erchangfish&hl=en_AU&gl=US) was used to understand the protocol.
+
+The main protocol differences is that F68 has 20 bytes for the data, and some flags seems to be omitted compared to the original.
+
+The depth reading has been tested in the ocean and seems accurate up to 50 meters. The fish depth has not been calibrated.
+
+To distinguish this version from the original code, a device type has been added to switch between different code paths:
+```
+    public static final BtDeviceType BT_DEVICE_TYPE = BtDeviceType.F68;
+```
+
+...
+
+> The text below is from the original fork
+
 ## Usage
 To install, click on the [Releases](https://github.com/cdot/Ping/releases) link on the 
 right of the screen to see the binary releases. Download the APK file to your device and open it to install. Android

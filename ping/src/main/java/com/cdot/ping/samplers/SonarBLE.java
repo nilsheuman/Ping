@@ -142,8 +142,14 @@ public class SonarBLE extends BleManager implements SonarBluetooth.BTImplementat
             }
 
             if ((mConfigureCharacteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE) == 0) {
-                Log.e(TAG, "Can't write configurations");
-                return false;
+                if (SonarBluetooth.BT_DEVICE_TYPE == SonarBluetooth.BtDeviceType.PING_ORIGINAL) {
+                    Log.e(TAG, "Can't write configurations");
+                    return false;
+                } else if (SonarBluetooth.BT_DEVICE_TYPE == SonarBluetooth.BtDeviceType.F68) {
+                    Log.i(TAG, "Can't write configurations, Expected on F68 so ignore.");
+                } else {
+                    Log.e(TAG, "Can't write configurations, unknown device, ignore");
+                }
             }
 
             mConfigureCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
@@ -161,11 +167,17 @@ public class SonarBLE extends BleManager implements SonarBluetooth.BTImplementat
 
         @Override // BleManagerGattCallback
         protected void initialize() {
-            RequestQueue q = beginAtomicRequestQueue()
-                    //.add(enableNotifications(mSampleCharacteristic));
-                    .add(enableIndications(mSampleCharacteristic));
-            //setNotificationCallback(mSampleCharacteristic)
-            //        .with(mSonarHandler);
+            RequestQueue q = beginAtomicRequestQueue();
+            if (SonarBluetooth.BT_DEVICE_TYPE == SonarBluetooth.BtDeviceType.PING_ORIGINAL) {
+                q.add(enableIndications(mSampleCharacteristic));
+            } else if (SonarBluetooth.BT_DEVICE_TYPE == SonarBluetooth.BtDeviceType.F68) {
+                q.add(enableNotifications(mSampleCharacteristic));
+                setNotificationCallback(mSampleCharacteristic)
+                        .with(mSonarHandler);
+            } else {
+                Log.e(TAG, "initialize() invalid BT_DEVICE_TYPE");
+            }
+
             setIndicationCallback(mSampleCharacteristic)
                     .with(mSonarHandler);
             if (mLocationCharacteristic != null) {
