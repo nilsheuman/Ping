@@ -58,6 +58,11 @@ public class SonarBluetooth implements ConnectionObserver {
 
 
     public static final String BT_DEVICE_NAME = "Erchang Fish";
+    public static enum BtDeviceType {
+        PING_ORIGINAL,
+        F68
+    }
+    public static final BtDeviceType BT_DEVICE_TYPE = BtDeviceType.F68;
 
     // UUIDs
     public static final UUID SERVICE_UUID = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb");
@@ -292,30 +297,61 @@ public class SonarBluetooth implements ConnectionObserver {
         cancelTimeout();
         mSampleTimeout = sampleTimeout;
 
-        // reverse-engineered by sniffing packets sent by the official FishFinder software
-        byte[] data = new byte[]{
-                // http://ww1.microchip.com/downloads/en/DeviceDoc/50002466B.pdf
-                SonarBluetooth.ID0, SonarBluetooth.ID1, // 0, 1
-                0, 0, SonarBluetooth.COMMAND_CONFIGURE, // 2, 3, 4
-                3, // 5 size
-                (byte) sensitivity, (byte) noise, (byte) range, // 6, 7, 8
-                0, 0, 0 // 9 checksum, 10, 11 might do more, not experimented.
-        };
-        // Compute checksum
-        int sum = 0;
-        for (int i = 0; i < 9; i++) {
-            sum += data[i];
-        }
-        data[9] = (byte) (sum & 255);
+        if (BT_DEVICE_TYPE == BtDeviceType.PING_ORIGINAL) {
+            // reverse-engineered by sniffing packets sent by the official FishFinder software
+            byte[] data = new byte[]{
+                    // http://ww1.microchip.com/downloads/en/DeviceDoc/50002466B.pdf
+                    SonarBluetooth.ID0, SonarBluetooth.ID1, // 0, 1
+                    0, 0, SonarBluetooth.COMMAND_CONFIGURE, // 2, 3, 4
+                    3, // 5 size
+                    (byte) sensitivity, (byte) noise, (byte) range, // 6, 7, 8
+                    0, 0, 0 // 9 checksum, 10, 11 might do more, not experimented.
+            };
+            // Compute checksum
+            int sum = 0;
+            for (int i = 0; i < 9; i++) {
+                sum += data[i];
+            }
+            data[9] = (byte) (sum & 255);
 
-        mImplementation.sendConfiguration(data);
+            mImplementation.sendConfiguration(data);
+        } else if (BT_DEVICE_TYPE == BtDeviceType.F68) {
+            byte PrefLureFishLamp = 0; // (0)off, (1)on
+            byte PrefFrequency = 0; // (0)125k, (1)330k, (2)auto
+            Log.d(TAG, "PrefLureFishLamp=" + PrefLureFishLamp);
+            byte[] data = new byte[] {
+                    SonarBluetooth.ID0, SonarBluetooth.ID1, // 0, 1
+                    1,
+                    (byte) noise, // [0..3]
+                    (byte) sensitivity, // [1..100]
+                    PrefLureFishLamp,
+                    (byte) range, // [1..7] and default, probably 0
+                    PrefFrequency, // 7
+                    0, 0, // 8, 9 checksum place holders
+            };
+            byte checksum = 0;
+            for (int i = 0; i < 8; i++) {
+                checksum += data[i];
+            }
+            data[8] = (byte) (checksum & 255);
+            data[9] = (byte) 85;
+
+            mImplementation.sendConfiguration(data);
+        }
+
 
         resetSampleRate();
         startTimeout();
     }
 
     ProfileDataCallback getSonarHandler() {
-        return new SonarHandler();
+        if (BT_DEVICE_TYPE == BtDeviceType.PING_ORIGINAL) {
+            return new SonarHandler();
+        } else if (BT_DEVICE_TYPE == BtDeviceType.F68) {
+            return new SonarHandlerF68();
+        } else {
+            return null;
+        }
     }
 
     ProfileDataCallback getLocationHandler() {
@@ -466,6 +502,142 @@ public class SonarBluetooth implements ConnectionObserver {
                 mRawSampleRate = ((mRawSampleRate * mTotalSamplesReceived) + samplingRate) / (mTotalSamplesReceived + 1);
                 mTotalSamplesReceived++;
                 mLastSampleTime = now;
+            }
+        }
+    }
+
+
+    // Handler for F68 device
+    class SonarHandlerF68 implements ProfileDataCallback {
+
+        private int mReceiveMCUDataCount;
+        int BTDataTotalLength = 140;
+        private int[] mReceiveMCUDataBuff = new int[BTDataTotalLength];
+
+        private String report(byte[] bytes) {
+            StringBuilder mess = new StringBuilder("Packet ");
+            for (int i = 0; i < bytes.length; i++)
+                mess.append((i == 0 ? "[" : ",") + ((int) bytes[i] & 0xFF));
+            return mess.append("]").toString();
+        }
+
+        @Override
+        public void onDataReceived(@NonNull final BluetoothDevice device, @NonNull final Data data) {
+            byte[] hexStrArrToBytes = data.getValue();
+            int i;
+            if (hexStrArrToBytes == null || hexStrArrToBytes.length < 20) {
+                return;
+            }
+            int i2 = this.mReceiveMCUDataCount;
+            if (i2 == 0) {
+                if (hexStrArrToBytes[0] != 83 || hexStrArrToBytes[1] != 70) {
+                    return;
+                }
+                int i3 = 0;
+                while (true) {
+                    if (i3 >= 140) {
+                        break;
+                    }
+                    this.mReceiveMCUDataBuff[i3] = 0;
+                    i3++;
+                }
+                for (i = 0; i < 20; i++) {
+                    this.mReceiveMCUDataBuff[i] = hexStrArrToBytes[i] & 255;
+                }
+                this.mReceiveMCUDataCount = 20;
+            } else if (i2 < 120) {
+                for (int i4 = 0; i4 < 20; i4++) {
+                    this.mReceiveMCUDataBuff[this.mReceiveMCUDataCount + i4] = hexStrArrToBytes[i4] & 255;
+                }
+                this.mReceiveMCUDataCount += 20;
+            } else {
+                for (int i5 = 0; i5 < 20; i5++) {
+                    this.mReceiveMCUDataBuff[this.mReceiveMCUDataCount + i5] = hexStrArrToBytes[i5] & 255;
+                }
+                this.mReceiveMCUDataCount = 0;
+                int[] iArr = this.mReceiveMCUDataBuff;
+                if (iArr[0] != 83 || iArr[1] != 70 || iArr[14] != 85 || iArr[135] != 170 || iArr[136] != 85 || iArr[137] != 170 || iArr[138] != 85 || iArr[139] != 170) {
+                    return;
+                }
+                int i6 = 0;
+                for (int i7 = 0; i7 < 13; i7++) {
+                    i6 += this.mReceiveMCUDataBuff[i7];
+                }
+                int[] iArr2 = this.mReceiveMCUDataBuff;
+
+                if ((i6 & 255) == iArr2[13]) {
+                    int[] iArr3 = this.mReceiveMCUDataBuff;
+                    int probeWaterDepth10ft = (iArr3[3] << 8) + iArr3[4];
+                    float probeWaterDepth = probeWaterDepth10ft / 32.81f; // 10*ft to m
+
+                    int probeFishDepth = (this.mReceiveMCUDataBuff[5] << 8) + this.mReceiveMCUDataBuff[6];
+                    int probeFishSize = this.mReceiveMCUDataBuff[7];
+
+                    byte probeBattery = (byte) this.mReceiveMCUDataBuff[8];
+
+                    int[] iArr5 = this.mReceiveMCUDataBuff;
+                    int probeWaterTemperature10F = (iArr5[9] << 8) + iArr5[10];
+                    float probeWaterTemperature = ((probeWaterTemperature10F / 10f) - 32) * 5 / 9f; // 10*F to celsius
+
+                    Sample sample = new Sample();
+                    sample.time = new Date().getTime();
+                    sample.depth = probeWaterDepth;
+                    // Max battery strength is 6. Scale to an integer percentage
+                    sample.battery = (byte) (100 * probeBattery / 6.0);
+                    sample.temperature = probeWaterTemperature;
+                    sample.fishDepth = probeFishDepth;
+                    sample.fishStrength = probeFishSize;
+
+                    sample.latitude = mCurrentLocation.getLatitude();
+                    sample.longitude = mCurrentLocation.getLongitude();
+
+                    if (mMustLogNextSample
+                            // Log if battery level has changed
+                            || sample.battery != mLastLoggedSample.battery
+                            // Log if temperature has changed enough
+                            || Math.abs(sample.temperature - mLastLoggedSample.temperature) >= MIN_DELTA_TEMPERATURE
+                            // Log if depth has changed enough, and it's not dry
+                            || Math.abs(sample.depth - mLastLoggedSample.depth) >= mMinDeltaDepth
+                            // if we've moved further than the current location accuracy or the target min delta
+                            || (mLastLoggedLocation.distanceTo(mCurrentLocation) > mMinDeltaPos)) {
+
+                        if (BuildConfig.DEBUG) {
+                            StringBuilder reason = new StringBuilder();
+                            reason.append("Logging sample because ");
+                            if (mMustLogNextSample)
+                                reason.append("I must");
+                            else {
+                                if (sample.battery != mLastLoggedSample.battery)
+                                    reason.append("Battery, ");
+                                if (Math.abs(sample.temperature - mLastLoggedSample.temperature) >= MIN_DELTA_TEMPERATURE)
+                                    reason.append("Temperature, ");
+                                if (Math.abs(sample.depth - mLastLoggedSample.depth) >= mMinDeltaDepth)
+                                    reason.append("Depth, ");
+                                if (mLastLoggedLocation.distanceTo(mCurrentLocation) > mMinDeltaPos)
+                                    reason.append("Location ").append(mLastLoggedLocation.distanceTo(mCurrentLocation));
+                            }
+                            Log.d(TAG, reason.toString());
+                        }
+
+                        mMustLogNextSample = false;
+                        mLastLoggedSample = sample;
+                        mLastLoggedLocation = new Location(mCurrentLocation);
+
+                        if (mService != null)
+                            mService.logSample(sample);
+                    }
+
+                    // Tell the timeout we're OK
+                    mSampleReceived = true;
+
+                    long now = System.currentTimeMillis();
+                    if (now > mLastSampleTime) {
+                        double samplingRate = 1000.0 / (now - mLastSampleTime);
+                        mRawSampleRate = ((mRawSampleRate * mTotalSamplesReceived) + samplingRate) / (mTotalSamplesReceived + 1);
+                        mTotalSamplesReceived++;
+                        mLastSampleTime = now;
+                    }
+                }
             }
         }
     }
