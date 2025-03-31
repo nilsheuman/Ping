@@ -56,6 +56,9 @@ public class SonarBluetooth implements ConnectionObserver {
     public static final int BT_STATE_DISCONNECTING = 4;
     public static final int BT_STATE_CONNECT_FAILED = 5;
 
+
+    public static final String BT_DEVICE_NAME = "Erchang Fish";
+
     // UUIDs
     public static final UUID SERVICE_UUID = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb");
     public static final UUID SAMPLE_CHARACTERISTIC_UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb");

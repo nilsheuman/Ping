@@ -122,7 +122,7 @@
     <string name="val_sample_rate">Rate: %1$.2gHz</string>
     <string name="val_strength">Strength %1$d%%</string>
     <string name="val_temperature">Temperature: %1$.2g°C</string>
-    <string name="default_device_name">Unspecified Bluetooth Device</string>
+    <string name="default_device_name">Unspecified</string>
     <string name="write_gpx_failed">Could not write GPX file</string>
     <string name="write_gpx_OK">GPX data written</string>
     <string name="menuitem_write_gpx">GPX</string>

@@ -200,8 +200,8 @@ public class DiscoveryFragment extends Fragment {
             // This means _paired_ and NOT _bonded_; see https://piratecomm.wordpress.com/2014/01/19/ble-pairing-vs-bonding/
             Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
             // DIY filtering, because the system code doesn't work (see above)
-            List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
-            if (uuids != null && uuids.contains(new ParcelUuid(SonarBluetooth.SERVICE_UUID))) {
+            // Instead of looking for SonarBluetooth.SERVICE_UUID as original code dit, just look for the device name
+            if (SonarBluetooth.BT_DEVICE_NAME.equals(device.getName())) {
                 if (mAutoConnect) {
                     // First device that offers the service we want. Fingers crossed!
                     getMainActivity().switchToConnectedFragment(device);
